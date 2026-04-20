@@ -830,3 +830,410 @@ AI 可执行：
 3. 《AI 月报生成流程设计与提示词规范》
 
 如果继续推进，建议优先先做字段字典，因为这是抽取准确率和自动成文质量的核心基础。
+
+---
+
+## 附录 A：字段存储与取回设计
+
+本附录用于补充说明：按照《物业报告字段字典》抽取出来的数据，应该如何存储、如何取回、以及为什么不能只保存成一篇 Markdown 报告。
+
+### A.1 设计目标
+
+字段存储设计需要同时满足以下目标：
+
+- 支持自动生成物业报告
+- 支持人工审核与修正
+- 支持来源追溯
+- 支持后续趋势分析和 dashboard
+- 支持未来扩展到合同提醒、欠费预警、运维分析等场景
+
+因此，第一阶段不建议只保存“报告成品”，而应同时保存“结构化字段结果”。
+
+### A.2 推荐存储原则
+
+建议采用以下基本原则：
+
+1. 原始文件不入数据库正文，只保存索引信息
+2. 字段抽取结果进入结构化存储
+3. 明细类数据单独建表
+4. 报告初稿单独保存为 Markdown 或 Word 输出文件
+5. 每个关键字段保留来源信息和置信度
+
+一句话概括：
+
+**原始文件保存在文件系统，结构化结果保存在数据库，报告成品单独输出。**
+
+### A.3 推荐的三层存储结构
+
+建议按以下三层组织数据。
+
+#### 第 1 层：原始资料层
+
+用于保存文件索引，不改变原始资料本身。
+
+建议保存内容：
+
+- 文件路径
+- 文件类型
+- 所属物业
+- 所属月份
+- 文件哈希值
+- 上传时间
+
+用途：
+
+- 知道原始文件在哪里
+- 支持来源追溯
+- 支持重复文件识别
+
+#### 第 2 层：结构化结果层
+
+这是最核心的一层，用于保存 Agent 按字段字典抽取出的结果。
+
+建议保存内容：
+
+- 报告主信息
+- 财务汇总
+- 欠费汇总
+- 合同与执照汇总
+- 维修与运营汇总
+- 安保汇总
+- 公用事业汇总
+- 治理与待决事项汇总
+
+用途：
+
+- 生成月报
+- 人工审核
+- 趋势分析
+- 二次复用
+
+#### 第 3 层：明细与追溯层
+
+用于保存列表型、明细型和来源型数据。
+
+建议保存内容：
+
+- 欠费明细
+- 合同明细
+- 执照明细
+- 维修明细
+- 安保事件明细
+- 客诉明细
+- 字段来源明细
+
+用途：
+
+- 支持逐项核查
+- 支持字段级追溯
+- 支持按单元、合同、事件查询
+
+### A.4 为什么不能只存 Markdown
+
+如果只保存一篇 Markdown 报告，会有以下问题：
+
+- 无法方便地按字段复核
+- 无法按月份做趋势对比
+- 无法按物业做横向分析
+- 无法准确追溯某个数值来自哪里
+- 无法把数据复用于 dashboard、提醒和预警模块
+
+因此，Markdown 只适合作为“输出成品”，不适合作为唯一数据载体。
+
+### A.5 推荐的最小数据库模型
+
+第一阶段建议使用“主表 + 字段表 + 明细表 + 来源表”的结构。
+
+#### 1. 报告主表 `reports`
+
+建议字段：
+
+- report_id
+- property_name
+- mcst_no
+- report_month
+- report_type
+- status
+- generated_at
+- reviewed_at
+
+作用：
+
+- 一份报告一个主记录
+- 所有章节、字段、明细都挂在 `report_id` 下面
+
+#### 2. 字段结果表 `field_extractions`
+
+建议字段：
+
+- id
+- report_id
+- field_name
+- field_value
+- value_type
+- confidence_score
+- review_required
+- review_status
+- source_file
+- source_page
+- source_sheet
+- source_row
+- extracted_text
+
+作用：
+
+- 存储每个字段的抽取结果
+- 支持逐字段审核
+- 支持来源追溯
+
+这张表是第一阶段最关键的表。
+
+#### 3. 章节结果表 `report_sections`
+
+建议字段：
+
+- id
+- report_id
+- section_name
+- section_json
+- section_markdown
+- review_status
+
+作用：
+
+- 存储按章节生成的结果
+- 支持按章节审核
+- 支持快速拼装整份报告
+
+#### 4. 来源文件表 `source_documents`
+
+建议字段：
+
+- id
+- report_id
+- file_name
+- file_path
+- source_type
+- file_hash
+- uploaded_at
+- parsed_status
+
+作用：
+
+- 记录本次报告使用了哪些原始资料
+- 支持审计和回查
+
+### A.6 推荐的明细表
+
+对于列表类字段，建议不要塞进一个大文本字段中，而是拆成独立明细表。
+
+#### `arrears_details`
+
+建议字段：
+
+- report_id
+- unit_no
+- owner_name
+- amount_due
+- aging_bucket
+- current_status
+- last_action_taken
+- recommended_next_action
+
+#### `contract_details`
+
+建议字段：
+
+- report_id
+- contract_name
+- vendor_name
+- service_category
+- contract_value
+- contract_end_date
+- recommended_action
+
+#### `license_details`
+
+建议字段：
+
+- report_id
+- license_name
+- issuing_authority
+- expiry_date
+- status
+- follow_up_action
+
+#### `maintenance_details`
+
+建议字段：
+
+- report_id
+- item_date
+- system_category
+- issue_description
+- action_taken
+- current_status
+- responsible_party
+- quoted_amount
+
+#### `security_incidents`
+
+建议字段：
+
+- report_id
+- incident_date
+- incident_type
+- incident_summary
+- action_taken
+- current_status
+
+#### `resident_cases`
+
+建议字段：
+
+- report_id
+- case_date
+- unit_no
+- case_type
+- summary
+- current_status
+- recommended_action
+
+### A.7 推荐的主键与取回键
+
+建议统一使用：
+
+- `report_id = [property_code]_[YYYY-MM]_[report_type]`
+
+例如：
+
+- `GOLDENHILL_2026-02_MONTHLY`
+- `CAMBIO_2026-02_MONTHLY`
+
+这样做的好处：
+
+- 一眼可读
+- 查询简单
+- 生成、审核、导出时都可以共用同一键
+
+常见取回方式如下：
+
+#### 按报告取回
+
+适用于生成整份报告：
+
+- 用 `report_id` 查询 `reports`
+- 用 `report_id` 查询 `field_extractions`
+- 用 `report_id` 查询各明细表
+- 再按模板拼装报告
+
+#### 按字段取回
+
+适用于审核某个字段：
+
+- 用 `report_id + field_name` 查询字段结果
+
+例如：
+
+- `report_id = GOLDENHILL_2026-02_MONTHLY`
+- `field_name = arrears_total_amount`
+
+可直接取到：
+
+- 字段值
+- 来源文件
+- 来源页码/工作表
+- 抽取原文
+- 是否已复核
+
+#### 按物业和月份取回
+
+适用于报表和趋势分析：
+
+- 用 `property_name`
+- 用 `report_month` 范围
+
+例如查看最近 12 个月：
+
+- 欠费总额趋势
+- 管理基金盈余趋势
+- 公用事业成本趋势
+
+### A.8 推荐的技术选型
+
+第一阶段建议用轻量方案，不必上复杂架构。
+
+#### 推荐方案：SQLite
+
+优点：
+
+- 易部署
+- 本地可运行
+- 无需单独数据库服务
+- 适合 Agent V1 试点
+
+适用场景：
+
+- 单物业试点
+- 内部团队使用
+- 快速验证
+
+#### 第二阶段可考虑：PostgreSQL
+
+适用场景：
+
+- 多物业
+- 多用户协作
+- 未来接前端、API、仪表盘
+
+#### 不推荐作为长期方案：只用 JSON 或只用 Markdown
+
+原因：
+
+- 查询困难
+- 趋势分析困难
+- 审核困难
+- 追溯困难
+
+### A.9 推荐的数据流
+
+建议采用以下数据流：
+
+```text
+原始资料目录
+  -> Agent 扫描
+  -> 内容抽取
+  -> 写入结构化数据库
+  -> 生成章节结果
+  -> 生成 Markdown 报告初稿
+  -> 人工审核修订
+```
+
+这个流程的优点是：
+
+- 报告生成可重复
+- 抽取结果可复核
+- 数据可以复用
+
+### A.10 第一阶段最实用的落地组合
+
+如果第一阶段希望低成本、低复杂度上线，最推荐的组合是：
+
+- 文件系统：存原始资料
+- SQLite：存结构化字段和明细结果
+- Markdown：存 AI 生成报告初稿
+
+这是目前最适合 Agent V1 的落地方式。
+
+### A.11 后续扩展价值
+
+一旦字段存储层建好，后面可以直接扩展出更多能力：
+
+- 合同到期提醒
+- 执照到期提醒
+- 欠费趋势看板
+- 月度运维 dashboard
+- 重点事项自动摘要
+- 跨物业对比分析
+
+因此，字段存储设计不仅服务于“生成报告”，也是后续智能物业管理系统的数据基础。
