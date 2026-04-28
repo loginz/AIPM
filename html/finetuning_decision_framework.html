@@ -1,0 +1,323 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+.wrap{padding:1rem 0;font-family:var(--font-sans)}
+.sec-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:20px}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:20px}
+.badge{display:inline-block;font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;margin-bottom:6px}
+.badge-no{background:var(--color-background-danger);color:var(--color-text-danger)}
+.badge-yes{background:var(--color-background-success);color:var(--color-text-success)}
+.badge-maybe{background:var(--color-background-warning);color:var(--color-text-warning)}
+.badge-info{background:var(--color-background-info);color:var(--color-text-info)}
+.card-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.card-body{font-size:12px;color:var(--color-text-secondary);line-height:1.7}
+.row-item{display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.row-item:last-child{border-bottom:none}
+.row-label{font-size:12px;font-weight:500;color:var(--color-text-primary);width:110px;flex-shrink:0;padding-top:1px}
+.row-val{font-size:12px;color:var(--color-text-secondary);line-height:1.6;flex:1}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.dot-yes{background:var(--color-text-success)}
+.dot-no{background:var(--color-text-danger)}
+.dot-warn{background:var(--color-text-warning)}
+
+.decision-tree{background:var(--color-background-secondary);border-radius:var(--border-radius-lg);padding:18px;margin-bottom:20px}
+.dt-q{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:8px}
+.dt-row{display:flex;gap:10px;margin-bottom:12px}
+.dt-opt{flex:1;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px;cursor:pointer;transition:border-color .15s}
+.dt-opt:hover{border-color:var(--color-border-info)}
+.dt-opt.chosen{border:1.5px solid var(--color-border-info);background:var(--color-background-info)}
+.dt-opt-label{font-size:11px;font-weight:500;margin-bottom:2px}
+.dt-opt-label.yes{color:var(--color-text-success)}
+.dt-opt-label.no{color:var(--color-text-danger)}
+.dt-opt-body{font-size:11px;color:var(--color-text-secondary);line-height:1.5}
+.result-box{background:var(--color-background-primary);border-radius:var(--border-radius-md);padding:14px 16px;margin-top:4px}
+.result-title{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.result-body{font-size:12px;color:var(--color-text-secondary);line-height:1.7}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{font-size:12px;padding:5px 12px;border-radius:20px;border:0.5px solid var(--color-border-secondary);cursor:pointer;color:var(--color-text-secondary);transition:all .15s}
+.tab.active{background:var(--color-background-info);color:var(--color-text-info);border-color:var(--color-border-info)}
+.data-panel{display:none}
+.data-panel.active{display:block}
+.qty-bar-wrap{margin-bottom:14px}
+.qty-label{font-size:12px;color:var(--color-text-secondary);margin-bottom:4px;display:flex;justify-content:space-between}
+.qty-track{height:6px;background:var(--color-border-tertiary);border-radius:3px;overflow:hidden}
+.qty-fill{height:100%;border-radius:3px;background:var(--color-text-info);transition:width .5s}
+</style>
+
+<div class="wrap">
+  <h2 style="position:absolute;left:-9999px">模型微调决策框架</h2>
+
+  <!-- Part 1: 三类需求 —— 什么情况需要微调 -->
+  <div class="sec-label" style="margin-top:0">什么情况需要微调 · 三类核心驱动</div>
+  <div class="grid3">
+    <div class="card">
+      <div class="badge badge-yes">强需求</div>
+      <div class="card-title">风格/格式锁定</div>
+      <div class="card-body">输出必须严格符合某种固定格式，Prompt无法稳定控制。例：物业工单必须输出JSON字段结构，字段名、顺序、类型一字不差。</div>
+    </div>
+    <div class="card">
+      <div class="badge badge-yes">强需求</div>
+      <div class="card-title">专业知识内化</div>
+      <div class="card-body">行业术语、内部知识、业务判断逻辑需要模型"默认就懂"，而不是每次靠上下文注入。例：物业设备型号、故障代码、行业规范。</div>
+    </div>
+    <div class="card">
+      <div class="badge badge-yes">强需求</div>
+      <div class="card-title">行为边界强化</div>
+      <div class="card-body">某些场景下基础模型会给出不适合业务的答案。微调让模型在特定情境下默认走正确路径，而不依赖Prompt约束。</div>
+    </div>
+    <div class="card">
+      <div class="badge badge-maybe">视情况</div>
+      <div class="card-title">Prompt过长低效</div>
+      <div class="card-body">System prompt超过3000 token，每次推理成本高且延迟大。微调可将上下文知识"压缩"进权重，减少运行时注入量。</div>
+    </div>
+    <div class="card">
+      <div class="badge badge-maybe">视情况</div>
+      <div class="card-title">少量样本已失效</div>
+      <div class="card-body">Few-shot示例已无法让模型稳定输出正确格式或逻辑，且示例超过10条仍不稳定，说明Prompt工程边界已到。</div>
+    </div>
+    <div class="card">
+      <div class="badge badge-no">不需要</div>
+      <div class="card-title">知识检索问题</div>
+      <div class="card-body">如果问题是"模型不知道某个事实"，RAG（检索增强）比微调更合适。微调教行为模式，RAG补充知识内容。</div>
+    </div>
+  </div>
+
+  <!-- Part 2: 决策树 -->
+  <div class="sec-label">交互式决策树 · 判断你是否需要微调</div>
+  <div class="decision-tree">
+    <div id="dt-content"></div>
+  </div>
+
+  <!-- Part 3: 数据要求 -->
+  <div class="sec-label">什么样的数据可以微调</div>
+  <div class="tabs" id="data-tabs">
+    <div class="tab active" onclick="switchTab('quality')">数据质量要求</div>
+    <div class="tab" onclick="switchTab('quantity')">数据量参考</div>
+    <div class="tab" onclick="switchTab('format')">数据格式</div>
+    <div class="tab" onclick="switchTab('pitfall')">常见陷阱</div>
+  </div>
+  <div id="data-panels">
+    <div class="data-panel active card" id="panel-quality">
+      <div class="row-item">
+        <div class="dot dot-yes"></div>
+        <div class="row-label">一致性</div>
+        <div class="row-val">同类输入必须对应同类输出。物业工单分类：「空调异响」永远归「设备维修」，不能有时归「噪音投诉」。矛盾样本是微调的毒药。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-yes"></div>
+        <div class="row-label">代表性</div>
+        <div class="row-val">训练数据必须覆盖真实业务分布。如果80%的工单是「水电维修」，数据集也应体现这个比例，而不是均匀采样。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-yes"></div>
+        <div class="row-label">边界案例</div>
+        <div class="row-val">主动收集模型当前答错的案例。微调的价值在于修正模型的弱点，而不是强化它已经会的东西。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-warn"></div>
+        <div class="row-label">标注质量</div>
+        <div class="row-val">人工标注必须经过双人审核。标注错误率超过5%，微调效果会显著下降甚至负优化。宁可数量少，质量要高。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-no"></div>
+        <div class="row-label">避免：噪声数据</div>
+        <div class="row-val">不要把所有历史对话直接喂进去。历史数据中包含大量模糊输入、错误输出、重复记录，需要清洗和筛选。</div>
+      </div>
+    </div>
+    <div class="data-panel card" id="panel-quantity">
+      <div class="qty-bar-wrap">
+        <div class="qty-label"><span>格式/风格对齐</span><span style="color:var(--color-text-info)">50–200条</span></div>
+        <div class="qty-track"><div class="qty-fill" style="width:15%"></div></div>
+      </div>
+      <div class="qty-bar-wrap">
+        <div class="qty-label"><span>分类任务（工单分流）</span><span style="color:var(--color-text-info)">200–500条/类</span></div>
+        <div class="qty-track"><div class="qty-fill" style="width:30%"></div></div>
+      </div>
+      <div class="qty-bar-wrap">
+        <div class="qty-label"><span>专业问答（设备故障诊断）</span><span style="color:var(--color-text-info)">500–2000条</span></div>
+        <div class="qty-track"><div class="qty-fill" style="width:50%"></div></div>
+      </div>
+      <div class="qty-bar-wrap">
+        <div class="qty-label"><span>复杂推理（合同审查）</span><span style="color:var(--color-text-info)">2000–10000条</span></div>
+        <div class="qty-track"><div class="qty-fill" style="width:75%"></div></div>
+      </div>
+      <div class="qty-bar-wrap">
+        <div class="qty-label"><span>全面能力提升（通用物业AI）</span><span style="color:var(--color-text-info)">10000条以上</span></div>
+        <div class="qty-track"><div class="qty-fill" style="width:100%"></div></div>
+      </div>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-top:10px">数量只是起点，质量决定天花板。100条精标数据 > 1000条噪声数据。</div>
+    </div>
+    <div class="data-panel card" id="panel-format">
+      <div class="row-item">
+        <div class="dot dot-yes"></div>
+        <div class="row-label">对话对格式</div>
+        <div class="row-val">{"messages": [{"role":"user","content":"..."},{"role":"assistant","content":"..."}]} — 这是主流格式，适用于OpenAI、Anthropic等API微调接口。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-yes"></div>
+        <div class="row-label">系统提示一致</div>
+        <div class="row-val">训练数据中的system prompt必须与推理时保持一致，否则分布偏移会导致微调效果在生产环境失效。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-yes"></div>
+        <div class="row-label">负样本纳入</div>
+        <div class="row-val">包含「这类问题不回答」「拒绝」的样本。让模型同时学会什么该做、什么不该做，比只给正样本更稳定。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-warn"></div>
+        <div class="row-label">多轮对话</div>
+        <div class="row-val">真实物业场景多为多轮：业主先描述问题→追问确认位置→确认时间。单轮样本可能导致模型在多轮场景中上下文失忆。</div>
+      </div>
+    </div>
+    <div class="data-panel card" id="panel-pitfall">
+      <div class="row-item">
+        <div class="dot dot-no"></div>
+        <div class="row-label">灾难性遗忘</div>
+        <div class="row-val">只喂垂直数据，模型可能"忘记"通用能力。解决：混入5–10%通用数据作为保护，或用LoRA等参数高效方法。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-no"></div>
+        <div class="row-label">过拟合</div>
+        <div class="row-val">数据量太小+训练轮次过多，模型背诵训练集而非泛化。需要留出验证集，在验证loss上升时早停。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-no"></div>
+        <div class="row-label">标签泄漏</div>
+        <div class="row-val">测试集样本混入训练集。评估时性能虚高，上线后大幅下降。数据分割必须在标注前完成。</div>
+      </div>
+      <div class="row-item">
+        <div class="dot dot-no"></div>
+        <div class="row-label">用微调替代RAG</div>
+        <div class="row-val">把大量文档塞入微调训练。文档内容应该走RAG，微调只管行为模式。两者职责不同，混用效果都差。</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const steps = [
+  {
+    q: "Prompt + few-shot示例能否稳定解决问题？",
+    opts: [
+      {label:"是", cls:"yes", body:"能稳定解决", next:"done-prompt"},
+      {label:"否", cls:"no", body:"无法稳定，还是出错", next:1}
+    ]
+  },
+  {
+    q: "问题根源是什么？",
+    opts: [
+      {label:"知识缺失", cls:"no", body:"模型不知道某个事实或内容", next:"done-rag"},
+      {label:"行为/格式问题", cls:"yes", body:"模型知道但输出方式不对", next:2}
+    ]
+  },
+  {
+    q: "是否有足够的标注数据？",
+    opts: [
+      {label:"有 ≥100条", cls:"yes", body:"有高质量输入-输出对", next:3},
+      {label:"没有", cls:"no", body:"数据还不够或质量差", next:"done-data"}
+    ]
+  },
+  {
+    q: "对延迟和成本有强约束吗？",
+    opts: [
+      {label:"有", cls:"yes", body:"实时响应，成本敏感", next:"done-ft-small"},
+      {label:"没有", cls:"no", body:"可接受较高推理成本", next:"done-ft-full"}
+    ]
+  }
+];
+
+const results = {
+  "done-prompt": {
+    title:"继续优化Prompt",
+    badge:"badge-no",
+    badgeText:"不需要微调",
+    body:"当前Prompt + few-shot已能稳定工作，微调的成本和复杂度不值得引入。持续收集边界案例，当Prompt无法覆盖时再考虑。"
+  },
+  "done-rag": {
+    title:"用RAG，不是微调",
+    badge:"badge-info",
+    badgeText:"换方案",
+    body:"知识缺失是RAG的问题，不是微调的问题。建立向量数据库，把文档、规范、历史工单接入检索系统。微调无法可靠地\"记住\"大量事实。"
+  },
+  "done-data": {
+    title:"先积累数据，再考虑微调",
+    badge:"badge-maybe",
+    badgeText:"条件未达到",
+    body:"数据不足时微调反而有害（过拟合）。建议：1) 先用Prompt收集真实交互数据；2) 建立人工标注流程；3) 积累到100+条高质量样本后重新评估。"
+  },
+  "done-ft-small": {
+    title:"LoRA / 小模型微调",
+    badge:"badge-yes",
+    badgeText:"建议微调",
+    body:"推荐LoRA（低秩适配）或对较小基础模型微调。优点：推理成本低、延迟小、部署灵活。适合物业工单分类、格式输出等高频任务。"
+  },
+  "done-ft-full": {
+    title:"全参数微调 / 大模型微调",
+    badge:"badge-yes",
+    badgeText:"建议微调",
+    body:"可以选择全参数微调或更大的基础模型。性能上限更高，适合复杂推理、专业问答类场景。注意防止灾难性遗忘，混入通用数据保护基础能力。"
+  }
+};
+
+let choices = [];
+
+function renderDT() {
+  const el = document.getElementById('dt-content');
+  let html = '';
+  let step = 0;
+  for (let i = 0; i < choices.length; i++) {
+    const s = steps[step];
+    const chosen = choices[i];
+    html += `<div style="margin-bottom:10px"><div class="dt-q">${s.q}</div><div class="dt-row">`;
+    s.opts.forEach((opt, j) => {
+      html += `<div class="dt-opt${j===chosen?' chosen':''}" onclick="choose(${i},${j})">
+        <div class="dt-opt-label ${opt.cls}">${opt.label}</div>
+        <div class="dt-opt-body">${opt.body}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+    const next = s.opts[chosen].next;
+    if (typeof next === 'string') {
+      const r = results[next];
+      html += `<div class="result-box">
+        <div style="margin-bottom:6px"><span class="badge ${r.badge}">${r.badgeText}</span></div>
+        <div class="result-title">${r.title}</div>
+        <div class="result-body">${r.body}</div>
+      </div>`;
+      el.innerHTML = html;
+      return;
+    }
+    step = next;
+  }
+  if (step < steps.length) {
+    const s = steps[step];
+    html += `<div><div class="dt-q">${s.q}</div><div class="dt-row">`;
+    s.opts.forEach((opt, j) => {
+      html += `<div class="dt-opt" onclick="choose(${choices.length},${j})">
+        <div class="dt-opt-label ${opt.cls}">${opt.label}</div>
+        <div class="dt-opt-body">${opt.body}</div>
+      </div>`;
+    });
+    html += `</div></div>`;
+  }
+  el.innerHTML = html;
+}
+
+function choose(stepIdx, optIdx) {
+  choices = choices.slice(0, stepIdx);
+  choices.push(optIdx);
+  renderDT();
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.data-panel').forEach(p => p.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('panel-'+id).classList.add('active');
+}
+
+renderDT();
+</script>
